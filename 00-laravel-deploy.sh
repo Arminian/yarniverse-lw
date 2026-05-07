@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 set -e
 
 echo "=== Starting Laravel Deployment ==="
@@ -13,7 +13,7 @@ if [ ! -f .env ]; then
 fi
 
 # Generate app key if not set
-if grep -q "APP_KEY=$\|APP_KEY=$" .env 2>/dev/null || ! grep -q "APP_KEY=" .env 2>/dev/null; then
+if ! grep -q "APP_KEY=.\+" .env 2>/dev/null; then
     echo "Generating APP_KEY..."
     php artisan key:generate --force
 fi
@@ -38,7 +38,6 @@ echo "=== Caching Laravel configuration ==="
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
-php artisan event:cache 2>/dev/null || true
 
 echo "=== Clearing permission cache ==="
 php artisan permission:cache-reset 2>/dev/null || true
