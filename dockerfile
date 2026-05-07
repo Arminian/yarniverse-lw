@@ -14,7 +14,7 @@ RUN npm run build
 FROM php:8.3-cli AS composer-build
 WORKDIR /app
 
-# Install system dependencies and PHP extensions required by Laravel/Filament
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -48,7 +48,7 @@ COPY composer.json composer.lock ./
 ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer install --no-dev --optimize-autoloader
 
-# copy app files (excluding node-built public assets)
+# copy app files
 COPY . .
 
 # copy built assets from node-build into public
@@ -58,10 +58,8 @@ COPY --from=node-build /app/public/build /app/public/build
 FROM richarvey/nginx-php-fpm:latest
 USER root
 
-# Install Node.js 20.x in the runtime container
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Install Node.js and npm on Alpine (needed for npm commands in deploy script)
+RUN apk add --no-cache nodejs npm
 
 # copy app and vendor from composer-build
 COPY --from=composer-build /app /var/www/html
