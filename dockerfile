@@ -11,8 +11,37 @@ COPY . .
 RUN npm run build
 
 # ------ stage 2: php / composer build --------
-FROM composer:2 AS composer-build
+FROM php:8.3-cli AS composer-build
 WORKDIR /app
+
+# Install system dependencies and PHP extensions required by Laravel/Filament
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    libzip-dev \
+    libpq-dev \
+    libicu-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libonig-dev \
+    libxml2-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        zip \
+        pdo \
+        pdo_pgsql \
+        pdo_mysql \
+        intl \
+        gd \
+        mbstring \
+        xml \
+        bcmath \
+        pcntl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # copy composer files and vendor install
 COPY composer.json composer.lock ./
