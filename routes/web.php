@@ -31,10 +31,6 @@ Route::middleware('auth:customer')->group(function () {
     })->name('logout');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::view('home', 'pages::home-page')->name('home');
-});
-
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', 'settings/profile');
 

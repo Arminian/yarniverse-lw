@@ -4,18 +4,31 @@ set -e
 echo "=== Starting Laravel Deployment ==="
 cd /var/www/html
 
-echo "=== Creating .env file if it doesn't exist ==="
+echo "=== Setting up environment ==="
 if [ ! -f .env ]; then
     echo "Creating .env from .env.example..."
-    if [ -f .env.example ]; then
-        cp .env.example .env
-    fi
+    cp .env.example .env
 fi
 
-# Generate app key if not set
+# Ensure APP_KEY exists in .env file
+if [ -n "$APP_KEY" ] && ! grep -q "APP_KEY=.\+" .env 2>/dev/null; then
+    echo "APP_KEY=$APP_KEY" >> .env
+fi
+
+# Generate app key if empty
 if ! grep -q "APP_KEY=.\+" .env 2>/dev/null; then
     echo "Generating APP_KEY..."
     php artisan key:generate --force
+fi
+
+# Ensure Render's DATABASE_URL is used
+if [ -n "$DATABASE_URL" ]; then
+    echo "Setting up database from DATABASE_URL..."
+    php -r "
+    \$url = getenv('DATABASE_URL');
+    \$parts = parse_url(\$url);
+    file_put_contents('.env', \"\nDB_CONNECTION=pgsql\nDB_HOST=\$parts[host]\nDB_PORT=\$parts[port]\nDB_DATABASE=\" . ltrim(\$parts[path], '/') . \"\nDB_USERNAME=\$parts[user]\nDB_PASSWORD=\$parts[pass]\n\", FILE_APPEND);
+    "
 fi
 
 echo "=== Installing NPM dependencies ==="
@@ -24,20 +37,24 @@ npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
 echo "=== Building frontend assets ==="
 npm run build
 
+echo "=== Clearing caches ==="
+php artisan optimize:clear 2>/dev/null || true
+
 echo "=== Running database migrations ==="
-php artisan migrate --force --no-interaction || echo "Migrations warning (may be first deploy)"
+php artisan migrate --force --no-interaction || echo "Migrations warning"
 
 echo "=== Running seeders ==="
-php artisan db:seed --class=UserSeeder --force 2>/dev/null || echo "Seeding skipped or failed"
+php artisan db:seed --class=UserSeeder --force 2>/dev/null || echo "Seeding skipped"
 
 echo "=== Setting up Filament Shield ==="
-php artisan shield:install --minimal --force 2>/dev/null || echo "Shield install skipped"
-php artisan shield:generate --all --force 2>/dev/null || echo "Shield generate skipped"
+php artisan shield:setup --fresh 2>/dev/null || echo "Shield setup skipped"
+php artisan shield:generate --all 2>/dev/null || echo "Shield generate skipped"
 
 echo "=== Caching Laravel configuration ==="
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+php artisan event:cache 2>/dev/null || true
 
 echo "=== Clearing permission cache ==="
 php artisan permission:cache-reset 2>/dev/null || true
