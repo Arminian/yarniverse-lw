@@ -31,10 +31,10 @@ RUN apt-get update && apt-get install -y \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copy ALL app files first (so artisan exists)
+# Copy ALL app files first
 COPY . .
 
-# Then run composer install with scripts skipped (or with artisan available now)
+# Then run composer install
 ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
@@ -62,4 +62,4 @@ RUN chown -R www-data:www-data /var/www/html \
 USER www-data
 
 # Run deployment script first, then start services
-CMD /usr/local/bin/00-laravel-deploy.sh && /start.sh
+CMD /usr/local/bin/00-laravel-deploy.sh && /run.sh
