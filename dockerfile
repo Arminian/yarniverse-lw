@@ -11,7 +11,7 @@ COPY . .
 RUN npm run build
 
 # ------ stage 2: php / composer build --------
-FROM composer:2.6-cli AS composer-build
+FROM composer:2 AS composer-build
 WORKDIR /app
 
 # copy composer files and vendor install
@@ -48,25 +48,5 @@ RUN chmod +x /usr/local/bin/00-laravel-deploy.sh
 RUN chown -R www-data:www-data /var/www/html \
  && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
-# Wait for database to be ready (Render provides DATABASE_URL)\n\
-if [ -n "$DATABASE_URL" ]; then\n\
-    echo "Waiting for database..."\n\
-    # Extract database host from DATABASE_URL\n\
-    DB_HOST=$(echo $DATABASE_URL | awk -F[@/] "{print \$4}")\n\
-    until nc -z $DB_HOST 5432; do\n\
-        echo "Waiting for database connection..."\n\
-        sleep 2\n\
-    done\n\
-    echo "Database is ready!"\n\
-fi\n\
-\n\
-# Run the Laravel deploy script\n\
-/usr/local/bin/00-laravel-deploy.sh\n\
-\n\
-# Start the original services\n\
-exec /start.sh' > /usr/local/bin/start-laravel.sh \
-    && chmod +x /usr/local/bin/start-laravel.sh
-
-CMD ["/usr/local/bin/start-laravel.sh"]
+# Run deployment script first, then start services
+CMD /usr/local/bin/00-laravel-deploy.sh && /start.sh
