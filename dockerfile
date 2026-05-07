@@ -31,13 +31,12 @@ RUN apt-get update && apt-get install -y \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# copy composer files and vendor install
-COPY composer.json composer.lock ./
-ENV COMPOSER_ALLOW_SUPERUSER=1
-RUN composer install --no-dev --optimize-autoloader
-
-# copy app files
+# Copy ALL app files first (so artisan exists)
 COPY . .
+
+# Then run composer install with scripts skipped (or with artisan available now)
+ENV COMPOSER_ALLOW_SUPERUSER=1
+RUN composer install --no-dev --optimize-autoloader --no-scripts
 
 # ------ stage 2: runtime (nginx + php-fpm) ----------
 FROM serversideup/php:8.4-fpm-nginx-alpine
