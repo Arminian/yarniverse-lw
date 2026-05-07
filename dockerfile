@@ -1,16 +1,4 @@
-# ------ stage 1: node build -------
-FROM node:20-bullseye AS node-build
-WORKDIR /app
-
-# copy only package files for caching
-COPY package*.json ./
-RUN npm ci --legacy-peer-deps
-COPY . .
-
-# Vite production build
-RUN npm run build
-
-# ------ stage 2: php / composer build --------
+# ------ stage 1: php / composer build ------
 FROM php:8.3-cli AS composer-build
 WORKDIR /app
 
@@ -51,14 +39,11 @@ RUN composer install --no-dev --optimize-autoloader
 # copy app files
 COPY . .
 
-# copy built assets from node-build into public
-COPY --from=node-build /app/public/build /app/public/build
-
-# ---------- stage 3: runtime (nginx + php-fpm) ----------
+# ---------- stage 2: runtime (nginx + php-fpm) ----------
 FROM richarvey/nginx-php-fpm:latest
 USER root
 
-# Install Node.js and npm on Alpine (needed for npm commands in deploy script)
+# Install Node.js and npm on Alpine
 RUN apk add --no-cache nodejs npm
 
 # copy app and vendor from composer-build
