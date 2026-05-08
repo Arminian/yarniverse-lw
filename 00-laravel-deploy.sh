@@ -38,7 +38,8 @@ echo "=== Running seeders ==="
 php artisan db:seed --class=UserSeeder --force -n 2>/dev/null || echo "Seeding skipped"
 
 echo "=== Setting up Filament Shield ==="
-php artisan shield:install --panel=admin -n 2>/dev/null || echo "Shield install skipped"
+php artisan vendor:publish --tag="filament-shield-config"
+php artisan shield:setup -n --force 2>/dev/null || echo "Shield setup skipped"
 php artisan shield:super-admin --panel=admin --user=3 -n 2>/dev/null || echo "Shield generate admin skipped"
 
 echo "=== Caching Laravel configuration ==="
