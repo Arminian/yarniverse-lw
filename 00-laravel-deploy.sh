@@ -39,11 +39,15 @@ php artisan db:seed --class=UserSeeder --force -n 2>/dev/null || echo "Seeding s
 
 echo "=== Setting up Filament Shield ==="
 php artisan storage:link
-php artisan vendor:publish --tag="filament-shield-config"
+php artisan vendor:publish --tag="filament-shield-config" || echo "Shield config publish skipped"
 php artisan shield:setup -n --force 2>/dev/null || echo "Shield setup skipped"
 php artisan shield:super-admin --panel=admin --user=3 -n 2>/dev/null || echo "Shield generate admin skipped"
+php artisan shield:generate --all --panel=admin --option=policies_and_permissions || echo "Shield permissions skipped"
 
 echo "=== Caching Laravel configuration ==="
+php artisan optimize:clear
+
+php artisan filament:cache-components -n
 php artisan config:cache -n
 php artisan route:cache -n
 php artisan view:cache -n
