@@ -31,6 +31,11 @@ Route::middleware('auth:customer')->group(function () {
     })->name('logout');
 });
 
+// Health check
+Route::get('/healthz', function () {
+    return response('OK', 200)->header('Content-Type', 'text/plain');
+});
+
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', 'settings/profile');
 

@@ -28,7 +28,17 @@ COPY --from=composer-build /app /var/www/html
 # Copy nginx config
 COPY nginx/default.conf /etc/nginx/conf.d/custom.conf
 
-# Copy entrypoint scripts with proper permissions
+# Build assets
+WORKDIR /var/www/html
+
+# Install NPM dependencies and build assets
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+RUN npm run build
+
+# Verify build succeeded
+RUN test -f public/build/manifest.json || (echo "manifest.json not found!" && exit 1)
+
+# Copy entrypoint script (only for runtime setup, not for builds)
 COPY --chmod=755 00-laravel-deploy.sh /etc/entrypoint.d/99-laravel-deploy.sh
 
 # Register scripts with S6 Overlay
