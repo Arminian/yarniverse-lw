@@ -2,64 +2,57 @@
 FROM php:8.4-cli AS composer-build
 WORKDIR /app
 
-# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libzip-dev \
-    libpq-dev \
-    libicu-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libonig-dev \
-    libxml2-dev \
+    git unzip libzip-dev libpq-dev libicu-dev \
+    libpng-dev libjpeg-dev libfreetype6-dev libonig-dev libxml2-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
-        zip \
-        pdo \
-        pdo_pgsql \
-        pdo_mysql \
-        intl \
-        gd \
-        mbstring \
-        xml \
-        bcmath \
-        pcntl \
+        zip pdo pdo_pgsql pdo_mysql intl gd mbstring xml bcmath pcntl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# Copy ALL app files first (so artisan exists)
 COPY . .
-
-# Then run composer install with scripts skipped (or with artisan available now)
 ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
-# ------ stage 2: runtime (nginx + php-fpm) ----------
+# ------ stage 2: runtime ------
 FROM serversideup/php:8.4-fpm-nginx-alpine
 USER root
+
+# Install intl (local testing showed internal error for this)
+RUN install-php-extensions intl
 
 # Install Node.js and npm
 RUN apk add --no-cache nodejs npm
 
-# Copy application from composer-build stage
+# Copy application
 COPY --from=composer-build /app /var/www/html
 
-# Copy custom nginx config
+# Copy nginx config
 COPY nginx/default.conf /etc/nginx/conf.d/custom.conf
 
-# Copy deploy script
-COPY 00-laravel-deploy.sh /usr/local/bin/00-laravel-deploy.sh
-RUN chmod +x /usr/local/bin/00-laravel-deploy.sh
+# Build assets
+WORKDIR /var/www/html
+
+# Install NPM dependencies and build assets
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+RUN npm run build
+
+# Verify build succeeded
+RUN test -f public/build/manifest.json || (echo "manifest.json not found!" && exit 1)
+
+# Copy entrypoint script (only for runtime setup, not for builds)
+COPY --chmod=775 00-laravel-deploy.sh /etc/entrypoint.d/99-laravel-deploy.sh
+
+# Register scripts with S6 Overlay
+RUN docker-php-serversideup-s6-init
 
 # Set permissions
-RUN chown -R www-data:www-data /var/www/html \
- && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache
+RUN mkdir -p /var/www/html/storage/framework/views \
+    /var/www/html/storage/framework/cache \
+    /var/www/html/storage/framework/sessions \
+    /var/www/html/storage/logs \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 USER www-data
-
-# Run deployment script first, then start services
-CMD /usr/local/bin/00-laravel-deploy.sh && /start.sh

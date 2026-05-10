@@ -5,62 +5,63 @@ echo "=== Starting Laravel Deployment ==="
 cd /var/www/html
 
 echo "=== Setting up environment ==="
-if [ ! -f .env ]; then
+if [ ! -f .env ] && [ -f .env.example ]; then
     echo "Creating .env from .env.example..."
     cp .env.example .env
 fi
 
-# Ensure APP_KEY exists in .env file
-if [ -n "$APP_KEY" ] && ! grep -q "APP_KEY=.\+" .env 2>/dev/null; then
-    echo "APP_KEY=$APP_KEY" >> .env
-fi
-
-# Generate app key if empty
-if ! grep -q "APP_KEY=.\+" .env 2>/dev/null; then
-    echo "Generating APP_KEY..."
-    php artisan key:generate --force
-fi
-
-# Ensure Render's DATABASE_URL is used
+# Set database connection from DATABASE_URL
 if [ -n "$DATABASE_URL" ]; then
-    echo "Setting up database from DATABASE_URL..."
-    php -r "
-    \$url = getenv('DATABASE_URL');
-    \$parts = parse_url(\$url);
-    file_put_contents('.env', \"\nDB_CONNECTION=pgsql\nDB_HOST=\$parts[host]\nDB_PORT=\$parts[port]\nDB_DATABASE=\" . ltrim(\$parts[path], '/') . \"\nDB_USERNAME=\$parts[user]\nDB_PASSWORD=\$parts[pass]\n\", FILE_APPEND);
-    "
+    echo "Configuring database from DATABASE_URL..."
+    # Remove existing DB_* lines and add fresh ones
+    sed -i '/^DB_/d' .env 2>/dev/null || true
+    echo "DB_CONNECTION=pgsql" >> .env
 fi
 
-echo "=== Installing NPM dependencies ==="
-npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
+# Ensure APP_KEY exists
+if [ -n "$APP_KEY" ]; then
+    if ! grep -q "APP_KEY=[A-Za-z0-9]\+\S*" .env 2>/dev/null; then
+        echo "APP_KEY=$APP_KEY" >> .env
+    fi
+fi
 
-echo "=== Building frontend assets ==="
-npm run build
+# Generate app key if still empty
+if ! grep -q "APP_KEY=[A-Za-z0-9]\+\S*" .env 2>/dev/null; then
+    echo "Generating APP_KEY..."
+    php artisan key:generate --force -n
+fi
 
-echo "=== Clearing caches ==="
-php artisan optimize:clear 2>/dev/null || true
+echo "=== Setting permissions ==="
+# Ensure storage directory exists with proper structure
+mkdir -p /var/www/html/storage/framework/views
+mkdir -p /var/www/html/storage/framework/cache
+mkdir -p /var/www/html/storage/framework/sessions
+mkdir -p /var/www/html/storage/framework/testing
+mkdir -p /var/www/html/storage/logs
 
-echo "=== Running database migrations ==="
-php artisan migrate --force --no-interaction || echo "Migrations warning"
-
-echo "=== Running seeders ==="
-php artisan db:seed --class=UserSeeder --force 2>/dev/null || echo "Seeding skipped"
-
-echo "=== Setting up Filament Shield ==="
-php artisan shield:setup --fresh 2>/dev/null || echo "Shield setup skipped"
-php artisan shield:generate --all 2>/dev/null || echo "Shield generate skipped"
-
-echo "=== Caching Laravel configuration ==="
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan event:cache 2>/dev/null || true
-
-echo "=== Clearing permission cache ==="
-php artisan permission:cache-reset 2>/dev/null || true
-
-echo "=== Setting proper permissions ==="
+# Set ownership and permissions
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+echo "=== Running database migrations ==="
+php artisan migrate --force -n || echo "Migrations warning"
+
+echo "=== Setting up Shield ==="
+php artisan shield:install admin -n 2>/dev/null || echo "Shield setup skipped"
+
+echo "=== Running seeders ==="
+php artisan db:seed --class=UserSeeder --force -n 2>/dev/null || echo "Seeding skipped"
+
+echo "=== Generating Shield permissions for all resources ==="
+php artisan shield:generate --all --panel=admin --option=policies_and_permissions || echo "Shield permissions skipped"
+
+echo "=== Setting up Shield ==="
+php artisan shield:super-admin --panel=admin --user=1 -n 2>/dev/null || echo "Shield generate admin skipped"
+
+echo "=== Caching Laravel configuration ==="
+php artisan config:cache -n
+php artisan route:cache -n
+php artisan view:cache -n
+php artisan event:cache -n 2>/dev/null || true
 
 echo "=== Deployment Complete ==="
